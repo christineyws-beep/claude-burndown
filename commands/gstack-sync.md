@@ -6,42 +6,97 @@ description: Check gstack repo for new or updated skills, compare against our co
 
 Check the gstack repo (github.com/garrytan/gstack) for new or updated skills, and compare against our local commands.
 
-## Step 1: Check gstack for changes
+**IMPORTANT: This is a lightweight diff check. Do NOT use Explore agents or WebFetch. Use only `gh api` and local file reads.**
 
+## Step 1: Early exit check
+
+Run this first:
 ```bash
-# Get latest gstack commit date and recent commits
-gh api repos/garrytan/gstack/commits --jq '.[0:10] | .[] | .commit.committer.date + " " + .commit.message' 2>/dev/null | head -20
-
-# Get gstack VERSION
-gh api repos/garrytan/gstack/contents/VERSION --jq '.content' | base64 -d 2>/dev/null
-
-# Get gstack CHANGELOG (last 50 lines)
-gh api repos/garrytan/gstack/contents/CHANGELOG.md --jq '.content' | base64 -d 2>/dev/null | head -50
-
-# List all skill directories
-gh api repos/garrytan/gstack/contents --jq '.[].name' 2>/dev/null | sort
+# Check latest commit date
+LAST_COMMIT=$(gh api repos/garrytan/gstack/commits --jq '.[0].commit.committer.date' 2>/dev/null)
+echo "Latest gstack commit: $LAST_COMMIT"
 ```
 
-## Step 2: Compare against our commands
+Read the SHA cache at `~/.claude/gstack-sha-cache.json`. If it exists and the latest commit date is before our last sync, report "No changes since last sync" and stop.
 
-List our current commands:
+## Step 2: Fetch gstack state (3 API calls only)
+
+Run all three in parallel:
 ```bash
-ls ~/.claude/commands/*.md | xargs -I{} basename {} .md | sort
+# 1. Recent commits (one-liners only)
+gh api repos/garrytan/gstack/commits --jq '.[0:10] | .[] | .commit.committer.date[:10] + " " + (.commit.message | split("\n")[0])' 2>/dev/null
 ```
 
-## Step 3: Identify gaps
-
-For each gstack skill directory, check:
-1. **New skills** — any directory we don't have an equivalent for?
-2. **Updated skills** — has the SKILL.md content changed significantly since we last synced?
-3. **New patterns** — any new conventions (e.g., conductor.json for parallel sessions) worth adopting?
-
-To check a specific skill for updates:
 ```bash
-gh api repos/garrytan/gstack/contents/<skill-name>/SKILL.md --jq '.sha' 2>/dev/null
+# 2. List all top-level directories (skill names)
+gh api repos/garrytan/gstack/contents --jq '[.[] | select(.type=="dir") | .name] | sort | .[]' 2>/dev/null
 ```
 
-## Step 4: Report
+```bash
+# 3. Get VERSION
+gh api repos/garrytan/gstack/contents/VERSION --jq '.content' 2>/dev/null | base64 -d
+```
+
+## Step 3: Compare against our commands
+
+Our commands (hard-coded mapping — update if we add/remove commands):
+
+| gstack skill | Our command | Status |
+| --- | --- | --- |
+| `plan-ceo-review` | `/plan ceo` | Integrated as mode |
+| `plan-design-review` | `/plan design` | Integrated as mode |
+| `plan-eng-review` | `/plan eng` | Integrated as mode |
+| `design-consultation` | `/design-consultation` | Adapted |
+| `review` | `/review` (built-in) | Built-in skill |
+| `ship` | `/ship` | Adapted |
+| `qa` | `/qa` | Adapted |
+| `qa-only` | `/qa-only` | Adapted |
+| `qa-design-review` | `/qa-design` | Adapted |
+| `browse` | `webapp-testing` (built-in) | Different approach |
+| `setup-browser-cookies` | `/setup-browser-cookies` | Adapted |
+| `retro` | `/retro` | Adapted |
+| `document-release` | `/document-release` | Adapted |
+| `gstack-upgrade` | `/gstack-sync` | We check upstream |
+
+Our extras (not in gstack): `/security-check`, `/nightly-burndown`, `/nn`, `/overnight`, `/daily-tasks`, `/gg`, `/gstack-sync`, `/api-review`, `/changelog`, `/red-team`, `/threat-model`, `/plan`
+
+Compare the gstack directory listing from Step 2 against the left column above. Any directory NOT in the table is a **new skill**.
+
+## Step 4: Check SHAs for updated skills
+
+Only for skills that exist in both — fetch their SKILL.md SHA and compare to cached values:
+```bash
+# For each mapped gstack skill, get the SKILL.md SHA
+# Run as a single command to minimize API calls
+for skill in design-consultation qa qa-only qa-design-review retro document-release ship setup-browser-cookies browse plan-ceo-review plan-design-review plan-eng-review review gstack-upgrade; do
+  SHA=$(gh api "repos/garrytan/gstack/contents/$skill/SKILL.md" --jq '.sha' 2>/dev/null)
+  echo "$skill:$SHA"
+done
+```
+
+Compare each SHA against `~/.claude/gstack-sha-cache.json`. If a SHA changed, that skill was updated — fetch its SKILL.md content to see what changed:
+```bash
+gh api "repos/garrytan/gstack/contents/<skill-name>/SKILL.md" --jq '.content' | base64 -d
+```
+
+Only fetch content for skills whose SHA actually changed. If no SHAs changed, skip this entirely.
+
+## Step 5: Update SHA cache
+
+Write the current SHAs to `~/.claude/gstack-sha-cache.json`:
+```json
+{
+  "last_sync": "2026-03-18",
+  "last_commit": "<latest commit date>",
+  "shas": {
+    "design-consultation": "<sha>",
+    "qa": "<sha>",
+    ...
+  }
+}
+```
+
+## Step 6: Report
 
 ```markdown
 ## gstack Sync — [date]
@@ -51,45 +106,25 @@ gh api repos/garrytan/gstack/contents/<skill-name>/SKILL.md --jq '.sha' 2>/dev/n
 
 ### New Skills Found
 - [skill name] — [what it does] — **Recommend: integrate / skip / watch**
+(or "None")
 
 ### Updated Skills
 - [skill name] — [what changed] — **Recommend: update / no action**
-
-### New Patterns
-- [pattern] — [what it is] — **Recommend: adopt / skip**
-
-### Our Extras (not in gstack)
-- [commands we have that gstack doesn't]
+(or "None — all SHAs match")
 
 ### No Action Needed
-- [skills that are up to date]
+- All [N] mapped skills are current
 ```
 
-## Step 5: Create Task
+## Step 7: Create Task (only if actionable)
 
-If there are actionable updates, create a Google Tasks item:
+If there are new or updated skills, create a Google Tasks item:
 - Title: `gstack sync: [N] updates found — [date]`
 - Notes: Summary of what's new and recommendations
 
-## Schedule
+If no changes, skip task creation.
 
-This runs as part of the Monday `/nightly-burndown` or can be invoked manually with `/gstack-sync`.
+## Step 8: Update memory
 
-## Our Mapping
-
-| gstack | Ours | Notes |
-| --- | --- | --- |
-| `/plan-ceo-review` | `/plan ceo` | Integrated as mode |
-| `/plan-design-review` | `/plan design` | Integrated as mode |
-| `/plan-eng-review` | `/plan eng` | Integrated as mode |
-| `/design-consultation` | `/design-consultation` | Adapted |
-| `/review` | `/review` (built-in) | Built-in skill |
-| `/ship` | `/ship` | Adapted |
-| `/qa` | `/qa` | Adapted |
-| `/qa-only` | `/qa-only` | Adapted |
-| `/qa-design-review` | `/qa-design` | Adapted |
-| `/browse` | `webapp-testing` (built-in) | Different approach — Playwright vs custom binary |
-| `/setup-browser-cookies` | `/setup-browser-cookies` | Adapted |
-| `/retro` | `/retro` | Adapted |
-| `/document-release` | `/document-release` | Adapted |
-| `/gstack-upgrade` | `/gstack-sync` | We check upstream; they self-update |
+Update the `last_sync` date in the reference memory file at:
+`~/.claude/projects/-Users-cs-Coding/memory/reference_gstack_sync.md`
