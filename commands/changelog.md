@@ -89,4 +89,4 @@ If appending to CHANGELOG.md, prepend the new entry at the top (newest first).
 - Write for the user, not the developer — "you can now..." not "implemented handler for..."
 - Keep entries concise — one line each unless a feature needs explanation
 - Include contributor attribution if multiple authors
-- For Kinship Earth: mention data source names and record counts when relevant
+- For data-heavy projects: mention data source names and record counts when relevant

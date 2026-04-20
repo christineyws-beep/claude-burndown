@@ -1,19 +1,19 @@
 ---
-description: Run the Kinship Earth MCP API contract health check. Executes all 86 ecological API adapter tests, compares against the last run, and flags any new failures as upstream API contract breaks. Use /api-health after code changes, or let it run weekly via launchd on Sundays at 2am PT.
+description: Run an API contract health check for the current project. Executes the full test suite, compares against the last run, and flags any new failures as upstream API contract breaks. Use /api-health after code changes, or let it run weekly via launchd on Sundays at 2am PT.
 ---
 
-# API Health Check — Kinship Earth MCP
+# API Health Check
 
-You are running an API contract health check for the Kinship Earth MCP project. Your job is to run the full test suite against live ecological APIs, compare results to the previous run, and report any regressions that signal upstream API contract breaks.
+You are running an API contract health check for the current project. Your job is to run the full test suite against live APIs, compare results to the previous run, and report any regressions that signal upstream API contract breaks.
 
 ---
 
 ## Step 0 — Setup
 
-1. Ensure you are working in `~/Coding/kinship-earth-mcp/`.
+1. Ensure you are working in the project root directory.
 2. Create the log directory if it does not exist:
    ```bash
-   mkdir -p ~/Coding/notes/api-health-logs
+   mkdir -p ./api-health-logs
    ```
 3. Determine today's date for the log filename (`YYYY-MM-DD`).
 
@@ -21,7 +21,7 @@ You are running an API contract health check for the Kinship Earth MCP project. 
 
 ## Step 1 — Check for Previous Results
 
-Look for the most recent log in `~/Coding/notes/api-health-logs/`. Read it to extract:
+Look for the most recent log in `./api-health-logs/`. Read it to extract:
 - The list of **passing** tests
 - The list of **failing** tests
 - The date of the last run
@@ -32,7 +32,7 @@ If no previous log exists, treat all tests as "first run" (no regression compari
 
 ## Step 2 — Check for Code Changes
 
-Run `git log --oneline -5` in the kinship-earth-mcp directory to see if any code has changed since the last health check. Record whether there have been code changes — this is critical for interpreting failures:
+Run `git log --oneline -5` in the project directory to see if any code has changed since the last health check. Record whether there have been code changes — this is critical for interpreting failures:
 
 - **Failures with no code change** = upstream API contract break
 - **Failures with code change** = possibly our fault, needs investigation
@@ -44,7 +44,8 @@ Run `git log --oneline -5` in the kinship-earth-mcp directory to see if any code
 Execute the full test suite:
 
 ```bash
-cd ~/Coding/kinship-earth-mcp && uv run --package kinship-orchestrator pytest servers/ -v 2>&1
+# Adjust the test command for your project's test runner
+pytest -v 2>&1
 ```
 
 Capture the full output. Parse the results to extract:
@@ -78,7 +79,7 @@ Tests that appear in this run but not in the previous run.
 
 ## Step 5 — Write the Log
 
-Save a report to `~/Coding/notes/api-health-logs/YYYY-MM-DD.md` with this format:
+Save a report to `./api-health-logs/YYYY-MM-DD.md` with this format:
 
 ```markdown
 # API Health Check — YYYY-MM-DD

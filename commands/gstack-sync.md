@@ -58,7 +58,7 @@ Our commands (hard-coded mapping — update if we add/remove commands):
 | `document-release` | `/document-release` | Adapted |
 | `gstack-upgrade` | `/gstack-sync` | We check upstream |
 
-Our extras (not in gstack): `/security-check`, `/nightly-burndown`, `/nn`, `/overnight`, `/daily-tasks`, `/gg`, `/gstack-sync`, `/api-review`, `/changelog`, `/red-team`, `/threat-model`, `/plan`
+Our extras (not in gstack): `/security-check`, `/nightly-burndown`, `/gstack-sync`, `/api-review`, `/changelog`, `/red-team`, `/threat-model`, `/plan`
 
 Compare the gstack directory listing from Step 2 against the left column above. Any directory NOT in the table is a **new skill**.
 
